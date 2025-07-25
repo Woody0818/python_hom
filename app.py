@@ -2,19 +2,41 @@ import gradio as gr
 import os
 import time
 import chat
+from image_generate import image_generate
 
 # Chatbot demo with multimodal input (text, markdown, LaTeX, code blocks, image, audio, & video). Plus shows support for streaming text.
 
 messages = []
 current_file_text = None
 
+
 def add_text(history, text):
     """
-    Adds user text to the conversation history and messages list
+    严格按照最初能正常工作的格式：
+    - history: [{"role":x, "content":y}, ...]
+    - messages: [{"role":x, "content":y}, ...]
+    完全兼容Gradio的type="messages"模式
     """
     global messages
-    history.append({"role": "user", "content": text})
-    messages.append({"role": "user", "content": text})
+
+    # 1. 记录用户输入（统一字典格式）
+    user_entry = {"role": "user", "content": text}
+    history.append(user_entry)
+    messages.append(user_entry)
+
+    # 2. 处理图片指令（自动追加AI回复）
+    if text.startswith("/image"):
+        prompt = text[len("/image"):].strip()
+        image_url = image_generate(prompt)  # 调用图片生成
+
+        # 统一使用字典格式
+        ai_entry = {
+            "role": "assistant",
+            "content": image_url if image_url else "图片生成失败"
+        }
+        history.append(ai_entry)
+        messages.append(ai_entry)
+
     return history, gr.update(value="", interactive=False)
 
 
@@ -64,11 +86,19 @@ def add_file(history, file):
 
     return history
 
+
 def bot(history):
     """
     Gets bot response using the chat function and updates history
     """
     global messages
+    # 如果最后一条消息是图片URL，直接返回（不调用语言模型）
+    # 跳过已处理的图片消息（最后一条是AI的图片回复）
+    if len(history) > 0 and history[-1]["role"] == "assistant" and (
+            isinstance(history[-1]["content"], str) and
+            history[-1]["content"].startswith("http")
+    ):
+        return history
 
     if len(messages) <= 1:  # 只有系统提示没有用户消息
         response = "Hello,I'm your AI assistant.What can I do for you?"
@@ -106,6 +136,7 @@ def bot(history):
     history.append({"role": "assistant", "content": response})
     return history
 
+
 with gr.Blocks() as demo:
     chatbot = gr.Chatbot(
         type="messages",
@@ -134,4 +165,3 @@ with gr.Blocks() as demo:
 
 demo.queue()
 demo.launch()
-
