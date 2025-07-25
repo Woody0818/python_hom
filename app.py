@@ -13,8 +13,24 @@ def add_text(history, text):
     if not text.strip():
         return history, gr.update(value="", interactive=True)
 
-    history.append({"role": "user", "content": text})
-    messages.append({"role": "user", "content": text})
+        # 1. 记录用户输入（统一字典格式）
+    user_entry = {"role": "user", "content": text}
+    history.append(user_entry)
+    messages.append(user_entry)
+
+    # 2. 处理图片指令（自动追加AI回复）
+    if text.startswith("/image"):
+        prompt = text[len("/image"):].strip()
+        image_url = image_generate(prompt)  # 调用图片生成
+
+        # 统一使用字典格式
+        ai_entry = {
+            "role": "assistant",
+            "content": image_url if image_url else "图片生成失败"
+        }
+        history.append(ai_entry)
+        messages.append(ai_entry)
+
     return history, gr.update(value="", interactive=False)
 
 
