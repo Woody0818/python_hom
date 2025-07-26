@@ -3,6 +3,7 @@ import os
 import time
 import chat
 import json
+from image_generate import image_generate
 
 messages = []
 current_file_text = None
@@ -10,28 +11,35 @@ current_file_text = None
 
 def add_text(history, text):
     global messages
-    if not text.strip():
+
+    text = text.strip()
+    if not text:
         return history, gr.update(value="", interactive=True)
 
-        # 1. 记录用户输入（统一字典格式）
-    user_entry = {"role": "user", "content": text}
-    history.append(user_entry)
-    messages.append(user_entry)
+    # 判断是否是 /image 指令
+    if text.lower().startswith("/image "):
+        prompt = text[len("/image "):].strip()
+        print(f"[DEBUG] 触发图片生成，提示词: {prompt}")
+        image_url = image_generate(prompt)
 
-    # 2. 处理图片指令（自动追加AI回复）
-    if text.startswith("/image"):
-        prompt = text[len("/image"):].strip()
-        image_url = image_generate(prompt)  # 调用图片生成
+        user_entry = {"role": "user", "content": text}
+        ai_entry = {"role": "assistant", "content": image_url if image_url else "图片生成失败"}
 
-        # 统一使用字典格式
-        ai_entry = {
-            "role": "assistant",
-            "content": image_url if image_url else "图片生成失败"
-        }
-        history.append(ai_entry)
+        messages.append(user_entry)
         messages.append(ai_entry)
 
+        history.append(user_entry)
+        history.append(ai_entry)
+
+        return history, gr.update(value="", interactive=False)
+
+    # 普通文本处理
+    user_entry = {"role": "user", "content": text}
+    messages.append(user_entry)
+    history.append(user_entry)
+
     return history, gr.update(value="", interactive=False)
+
 
 
 def add_file(history, file):
@@ -76,10 +84,10 @@ def bot(history):
     print("Current messages:")
     print(json.dumps(messages, indent=2, ensure_ascii=False))
 
-    if len(messages) <= 1:
-        response = "Hello, I'm your AI assistant. What can I do for you?"
-        messages.append({"role": "assistant", "content": response})
-        history.append({"role": "assistant", "content": response})
+    if not any(m["role"] == "user" for m in messages):
+        welcome = {"role": "assistant", "content": "Hello, I'm your AI assistant. What can I do for you?"}
+        messages.append(welcome)
+        history.append(welcome)
         return history
 
     if messages[-1].get("is_file", False):
